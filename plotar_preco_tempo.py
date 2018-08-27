@@ -1,43 +1,63 @@
 #
 import pandas
-from bokeh.plotting import figure, show, output_file
-from bokeh.models import ColumnDataSource, Plot,DataRange1d
-from bokeh.models.glyphs import Line
-import matplotlib.pyplot as plt
-
-
-plt.style.use('seaborn-whitegrid')
+import csv
 import numpy as np
 
 
 
-
+#importa dados referentes ao DF
 df = pandas.read_csv("postos_df_header.csv", sep = ";",encoding='latin-1')
 print(df.info(verbose=True, null_counts=True))
 
-lista_postos_unicos = df.drop_duplicates()
+#cria lista contendo apenas cnjpjs distintos do DF
+lista_postos_unicos = df.drop_duplicates(subset=['cnpj'])
 lista_postos_unicos = lista_postos_unicos["cnpj"].tolist()
+candidatos = []
 
-for j in range(len(lista_postos_unicos)):
-    temp = df[df["cnpj"] == lista_postos_unicos[j]]
-    temp = temp.dropna(subset=["preo_venda_gasolina"])
+with open('employee_file.csv', mode='w') as employee_file:
+    employee_writer = csv.writer(employee_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
-    index = [i for i in range(len(temp))]
-    temp["x"] = index
+    employee_writer.writerow(["cnpj"])
 
-    venda = temp.dropna(subset=["preo_compra_gasolina"])
+    for j in range(len(lista_postos_unicos)):
 
-    if len(venda)>15 :
+        #extrai informações referentes ao posto j e armazena temporariamente em temp
+        temp = df[df["cnpj"] == lista_postos_unicos[j]]
 
-        #todo verificar se a diferenca de preco e maior que o minimo desejado
-        temp["dif"] = [float(a.replace(",",".")) - float(b.replace(",",".")) for a in temp["preo_venda_gasolina"] for b in temp["preo_compra_gasolina"].tolist()]
+        #armazena df com apenas linhas que contenham valor de venda
+        venda = temp.dropna(subset=["preo_venda_gasolina"])
 
-        fig = plt.figure()
-        ax = plt.axes()
-        fig = plt.figure(figsize=(11, 8))
-        ax1 = fig.add_subplot(111)
-        ax1.plot(temp["x"].tolist(), temp["preo_venda_gasolina"].tolist(), label=1)
-        ax1.plot(venda["x"].tolist(),venda["preo_compra_gasolina"].tolist(),label = 2)
-        plt.savefig('smooth_plot.png')
-        plt.show()
-    print(j)
+
+        if not len(venda) > 10:
+            continue
+
+        venda = venda.stack().str.replace(',', '.').unstack()
+        venda['preo_venda_gasolina'] = venda['preo_venda_gasolina'].astype('float64')
+
+
+        #calcula média de preço de venda
+        media_venda = venda["preo_venda_gasolina"].mean()
+
+
+        #adiciona index para temp
+        index = [i for i in range(len(temp))]
+        temp["x"] = index
+
+        #armazena df com apenas linhas que contenham valor de compra
+        compra = temp.dropna(subset=["preo_compra_gasolina"])
+
+        if not len(compra) > 10:
+            continue
+
+        compra = compra.stack().str.replace(',', '.').unstack()
+        compra["preo_compra_gasolina"] = compra['preo_compra_gasolina'].astype('float64')
+
+        #calcula média de preço de compra da gasolina
+        media_compra = compra["preo_compra_gasolina"].mean()
+        diferenca = media_venda - media_compra
+
+        if (diferenca > 0.3):
+            print("append",lista_postos_unicos[j]," ",j)
+
+            employee_writer.writerow([lista_postos_unicos[j]])
+
